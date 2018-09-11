@@ -132,9 +132,11 @@ var upgrader = websocket.Upgrader{
 		if len(origin) == 0 {
 			log.Println("Missing origin, websocket rejected")
 			permissionDeniedPrompt("<missing origin>")
+			return false
 		}
 		if configuration.AllowedOrigins[origin[0]] {
 			log.Println("Permitted origin, websocket accepted")
+			permissionAllowedPrompt(origin[0])
 			return true
 		}
 		log.Println("Unknown origin, websocket accepted")
@@ -214,14 +216,26 @@ func permissionDeniedPrompt(remote string) {
 
 	notification := toast.Notification{
 		AppID:   "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe",
-		Title:   "Debug Connection Denied",
-		Message: "A debug connection has been initiated from " + remote + " which is not in the allowed list and therefore the debug session was denied.",
+		Title:   "USB Debug Connection Denied",
+		Message: "A USB debug connection has been initiated from " + remote + " which is not in the allowed list and therefore the debug session was denied.",
 		Actions: []toast.Action{
 			{Type: "protocol", Label: "Help", Arguments: u.String()},
-			{Type: "protocol", Label: "Close", Arguments: ""},
 		},
 	}
 	err = notification.Push()
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func permissionAllowedPrompt(remote string) {
+	notification := toast.Notification{
+		AppID:   "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe",
+		Title:   "USB Debug Connection Allowed",
+		Message: "A USB debug connection has been initiated from " + remote + " which is in the allowed list and therefore has been enabled.",
+		Actions: []toast.Action{},
+	}
+	err := notification.Push()
 	if err != nil {
 		log.Fatalln(err)
 	}
