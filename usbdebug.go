@@ -17,10 +17,13 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/getlantern/deepcopy"
@@ -147,31 +150,109 @@ var upgrader = websocket.Upgrader{
 }
 
 func debug(w http.ResponseWriter, r *http.Request) {
-	c, err := upgrader.Upgrade(w, r, nil)
+	wsConn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print("upgrade:", err)
 		return
 	}
-	defer c.Close()
-	for {
-		mt, message, err := c.ReadMessage()
-		if err != nil {
-			log.Println("read:", err)
-			break
-		}
-		log.Printf("recv: %s", message)
-		err = c.WriteMessage(mt, message)
-		if err != nil {
-			log.Println("write:", err)
-			break
-		}
+
+	dapConn, err := net.Dial("tcp", "localhost:4711")
+	if err != nil {
+		log.Print("failed to connect to debugServer:", err)
+		wsConn.Close()
+		return
 	}
+
+	// From ws -> dap
+	go func() {
+		defer wsConn.Close()
+		defer dapConn.Close()
+		for {
+			_, message, err := wsConn.ReadMessage()
+			if err != nil {
+				log.Println("ws -> dap error reading:", err)
+				break
+			}
+			log.Printf("ws -> dap: %s\n", message)
+
+			_, err = dapConn.Write([]byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(message))))
+			if err != nil {
+				log.Println("ws -> dap error writing header:", err)
+				break
+			}
+			_, err = dapConn.Write(message)
+			if err != nil {
+				log.Println("ws -> dap error writing message:", err)
+				break
+			}
+		}
+	}()
+
+	// From dap -> ws
+	go func() {
+		defer wsConn.Close()
+		defer dapConn.Close()
+		// reader := bufio.NewReader(dapConn)
+		// reader := bufio.NewReader(conn)
+		contentLength := -1
+		var debugBuilder strings.Builder
+		var headerBuilder strings.Builder
+		newLine := false
+		for {
+			b := make([]byte, 1)
+
+			len, err := dapConn.Read(b)
+			if err != nil || len != 1 {
+				log.Println("dap -> ws error reading header byte, read so far '"+debugBuilder.String()+"':", err)
+				break
+			}
+
+			debugBuilder.Write(b)
+			if b[0] == '\n' {
+				if newLine {
+					// Two consecutive newlines have been read, which signals the start of the message content
+					if contentLength < 0 {
+						log.Println("dap -> ws error missing Content-Length, read so far '"+debugBuilder.String()+"':", err)
+					} else {
+						message := make([]byte, contentLength)
+						len, err := dapConn.Read(message)
+						if len != contentLength || err != nil {
+							log.Printf("dap -> ws error missing data, expected %d bytes, got %d bytes\n", contentLength, len)
+						} else if len != contentLength || err != nil {
+							log.Println("dap -> ws error reading data", err)
+						} else {
+							log.Printf("dap -> ws: %s\n", message)
+							wsConn.WriteMessage(websocket.TextMessage, message)
+						}
+					}
+					contentLength = -1
+					debugBuilder.Reset()
+				} else if headerBuilder.Len() > 0 {
+					header := headerBuilder.String()
+					lenStr := strings.TrimPrefix(header, "Content-Length: ")
+					if lenStr != header {
+						contentLength, err = strconv.Atoi(lenStr)
+						if err != nil {
+							contentLength = -1
+							log.Println("dap -> ws error converting Content-Length's value", err)
+						}
+					}
+					headerBuilder.Reset()
+				}
+				newLine = true
+			} else if b[0] != '\r' {
+				// Add the input to the current header line
+				headerBuilder.Write(b)
+				newLine = false
+			}
+		}
+	}()
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
 	if r.URL.String() == "/" {
 		log.Printf("Serving Home (" + r.URL.String() + ")\n")
-		homeTemplate.Execute(w, "ws://"+r.Host+"/debug")
+		homeTemplate.Execute(w, "ws://"+r.Host+"/services/debug-adapter/session-id")
 	} else {
 		log.Printf("Serving 404 Not Found (" + r.URL.String() + ")\n")
 		http.NotFound(w, r)
