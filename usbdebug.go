@@ -232,7 +232,7 @@ func permissionAllowedPrompt(remote string) {
 	notification := toast.Notification{
 		AppID:   "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe",
 		Title:   "USB Debug Connection Allowed",
-		Message: "A USB debug connection has been initiated from " + remote + " which is in the allowed list and therefore has been enabled.",
+		Message: "A USB debug connection has been initiated from " + remote + " which is in the allowed list and therefore has been allowed.",
 		Actions: []toast.Action{},
 	}
 	err := notification.Push()
@@ -267,8 +267,8 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 	loadAndWatchSettingsFile()
-	http.HandleFunc("/debug", debug)
 	http.HandleFunc("/", home)
+	http.HandleFunc("/services/debug-adapter/", debug)
 	http.HandleFunc("/help", help)
 
 	onExit := func() {
