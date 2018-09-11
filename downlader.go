@@ -1,3 +1,5 @@
+// From https://github.com/eddturtle/golangcode-site/blob/master/content/posts/2017-11-03-download-a-file-with-progress.md with an MIT license https://github.com/eddturtle/golangcode-site/blob/master/LICENSE
+
 package main
 
 import (
