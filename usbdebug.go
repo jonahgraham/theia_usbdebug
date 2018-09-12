@@ -32,11 +32,13 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -56,7 +58,8 @@ var homepath string
 
 // Configuration of USB Debug
 type Configuration struct {
-	AllowedOrigins map[string]bool
+	AllowedOrigins  map[string]bool
+	DebugServerMode bool
 }
 
 var configuration Configuration
@@ -81,6 +84,7 @@ func newIfEmptySettingsFile() {
 				"an example here":         true,
 				"a disabled example here": false,
 			},
+			DebugServerMode: false,
 		}
 		os.MkdirAll(filepath.Dir(settingsFilename()), 0700)
 		file, _ := os.Create(settingsFilename())
@@ -172,17 +176,44 @@ func debug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dapConn, err := net.Dial("tcp", "localhost:4711")
-	if err != nil {
-		log.Print("failed to connect to debugServer:", err)
-		wsConn.Close()
-		return
+	var toDap io.WriteCloser
+	var fromDap io.ReadCloser
+	// TODO make this condition based on debugServer configuration entry in the launch arguments?
+	if configuration.DebugServerMode {
+		dapConn, err := net.Dial("tcp", "localhost:4711")
+		toDap = dapConn
+		fromDap = dapConn
+		if err != nil {
+			log.Print("failed to connect to debugServer:", err)
+			wsConn.Close()
+			return
+		}
+	} else {
+		debugServer := exec.Command(filepath.Join(homepath, "node.exe"), filepath.Join(homepath, "extension/out/src/gdb.js"))
+		toDap, err = debugServer.StdinPipe()
+		if err != nil {
+			log.Print("failed to get debug server stdin:", err)
+			wsConn.Close()
+			return
+		}
+		fromDap, err = debugServer.StdoutPipe()
+		if err != nil {
+			log.Print("failed to get debug server stdout:", err)
+			wsConn.Close()
+			return
+		}
+		err = debugServer.Start()
+		if err != nil {
+			log.Print("failed to start debug server:", err)
+			wsConn.Close()
+			return
+		}
 	}
 
 	// From ws -> dap
 	go func() {
 		defer wsConn.Close()
-		defer dapConn.Close()
+		defer toDap.Close()
 		for {
 			_, message, err := wsConn.ReadMessage()
 			if err != nil {
@@ -191,12 +222,12 @@ func debug(w http.ResponseWriter, r *http.Request) {
 			}
 			log.Printf("ws -> dap: %s\n", message)
 
-			_, err = dapConn.Write([]byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(message))))
+			_, err = toDap.Write([]byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(message))))
 			if err != nil {
 				log.Println("ws -> dap error writing header:", err)
 				break
 			}
-			_, err = dapConn.Write(message)
+			_, err = toDap.Write(message)
 			if err != nil {
 				log.Println("ws -> dap error writing message:", err)
 				break
@@ -207,7 +238,7 @@ func debug(w http.ResponseWriter, r *http.Request) {
 	// From dap -> ws
 	go func() {
 		defer wsConn.Close()
-		defer dapConn.Close()
+		defer fromDap.Close()
 		// reader := bufio.NewReader(dapConn)
 		// reader := bufio.NewReader(conn)
 		contentLength := -1
@@ -217,7 +248,7 @@ func debug(w http.ResponseWriter, r *http.Request) {
 		for {
 			b := make([]byte, 1)
 
-			len, err := dapConn.Read(b)
+			len, err := fromDap.Read(b)
 			if err != nil || len != 1 {
 				log.Println("dap -> ws error reading header byte, read so far '"+debugBuilder.String()+"':", err)
 				break
@@ -231,7 +262,7 @@ func debug(w http.ResponseWriter, r *http.Request) {
 						log.Println("dap -> ws error missing Content-Length, read so far '"+debugBuilder.String()+"':", err)
 					} else {
 						message := make([]byte, contentLength)
-						len, err := dapConn.Read(message)
+						len, err := fromDap.Read(message)
 						if len != contentLength || err != nil {
 							log.Printf("dap -> ws error missing data, expected %d bytes, got %d bytes\n", contentLength, len)
 						} else if len != contentLength || err != nil {
