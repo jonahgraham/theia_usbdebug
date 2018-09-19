@@ -14,17 +14,6 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-// Layout
-// Root/
-//   usbdebug.exe
-//   common/
-//     node.exe
-//     JLinkARM.dll
-//     JLinkGDBServerCL.exe
-//     arm-none-eabi-gdb.exe
-//   dap/
-//     cortex-debug/ (its package)
-
 package main
 
 import (
@@ -36,7 +25,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,7 +38,6 @@ import (
 	"github.com/gorilla/websocket"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/skratchdot/open-golang/open"
-	toast "gopkg.in/toast.v1"
 )
 
 var port string
@@ -154,16 +141,16 @@ var upgrader = websocket.Upgrader{
 		origin := r.Header["Origin"]
 		if len(origin) == 0 {
 			log.Println("Missing origin, websocket rejected")
-			permissionDeniedPrompt("<missing origin>")
+			PermissionDeniedPrompt("<missing origin>")
 			return false
 		}
 		if configuration.AllowedOrigins[origin[0]] {
 			log.Println("Permitted origin, websocket accepted")
-			permissionAllowedPrompt(origin[0])
+			PermissionAllowedPrompt(origin[0])
 			return true
 		}
 		log.Println("Unknown origin, websocket accepted")
-		permissionDeniedPrompt(origin[0])
+		PermissionDeniedPrompt(origin[0])
 		return false
 	},
 	// use default options for everything else
@@ -330,42 +317,6 @@ func help(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// TODO provide other help??
 		helpTemplate.Execute(w, "ws://"+r.Host+"/debug")
-	}
-}
-
-func permissionDeniedPrompt(remote string) {
-	u, err := url.Parse(fmt.Sprintf(`http://localhost:%s/help`, port))
-	if err != nil {
-		panic("Failed to parse?")
-	}
-	parameters := url.Values{}
-	parameters.Add("origin", remote)
-	u.RawQuery = parameters.Encode()
-
-	notification := toast.Notification{
-		AppID:   "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe",
-		Title:   "USB Debug Connection Denied",
-		Message: "A USB debug connection has been initiated from " + remote + " which is not in the allowed list and therefore the debug session was denied.",
-		Actions: []toast.Action{
-			{Type: "protocol", Label: "Help", Arguments: u.String()},
-		},
-	}
-	err = notification.Push()
-	if err != nil {
-		log.Fatalln(err)
-	}
-}
-
-func permissionAllowedPrompt(remote string) {
-	notification := toast.Notification{
-		AppID:   "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe",
-		Title:   "USB Debug Connection Allowed",
-		Message: "A USB debug connection has been initiated from " + remote + " which is in the allowed list and therefore has been allowed.",
-		Actions: []toast.Action{},
-	}
-	err := notification.Push()
-	if err != nil {
-		log.Fatalln(err)
 	}
 }
 
