@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -179,7 +180,11 @@ func debug(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		debugServer := exec.Command(filepath.Join(homepath, "node.exe"), filepath.Join(homepath, "extension/out/src/gdb.js"))
+		nodePath := "node"
+		if runtime.GOOS == "windows" {
+			nodePath = filepath.Join(homepath, "node.exe")
+		}
+		debugServer := exec.Command(nodePath, filepath.Join(homepath, "extension/out/src/gdb.js"))
 		toDap, err = debugServer.StdinPipe()
 		if err != nil {
 			log.Print("failed to get debug server stdin:", err)
