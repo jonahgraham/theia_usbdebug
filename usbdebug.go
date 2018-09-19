@@ -182,7 +182,7 @@ func debug(w http.ResponseWriter, r *http.Request) {
 	} else {
 		nodePath := "node"
 		if runtime.GOOS == "windows" {
-			nodePath = filepath.Join(homepath, "node.exe")
+			nodePath = filepath.Join(homepath, "extension/node.exe")
 		}
 		debugServer := exec.Command(nodePath, filepath.Join(homepath, "extension/out/src/gdb.js"))
 		toDap, err = debugServer.StdinPipe()
