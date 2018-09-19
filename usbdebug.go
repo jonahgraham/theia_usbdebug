@@ -36,7 +36,6 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/getlantern/systray/example/icon"
 	"github.com/gorilla/websocket"
-	homedir "github.com/mitchellh/go-homedir"
 	"github.com/skratchdot/open-golang/open"
 )
 
@@ -52,7 +51,11 @@ type Configuration struct {
 var configuration Configuration
 
 func init() {
-	homepathdefault, err := homedir.Expand("~/.usbdebug")
+	ex, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	homepathdefault := filepath.Dir(ex)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -92,7 +95,7 @@ func loadSettingsFile() {
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	fmt.Println("Settings:")
+	fmt.Println("Settings, from file: " + settingsFilename())
 	fmt.Println(configuration)
 }
 
