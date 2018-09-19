@@ -65,7 +65,7 @@ func init() {
 }
 
 func settingsFilename() string {
-	return filepath.Join(homepath, "settings.json")
+	return filepath.Join(homepath, "usbdebug.json")
 }
 
 func newIfEmptySettingsFile() {
