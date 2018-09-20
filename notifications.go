@@ -35,6 +35,9 @@ func PermissionDeniedPrompt(remote string) {
 	parameters.Add("origin", remote)
 	u.RawQuery = parameters.Encode()
 
+	fmt.Println("A USB debug connection has been initiated from " + remote + " which is not in the allowed list and therefore the debug session was denied.")
+	fmt.Println("Open help: " + u.String())
+
 	notification := toast.Notification{
 		AppID:   "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe",
 		Title:   "USB Debug Connection Denied",
@@ -51,6 +54,8 @@ func PermissionDeniedPrompt(remote string) {
 
 // PermissionAllowedPrompt display a notification to the user that the origin was allowed
 func PermissionAllowedPrompt(remote string) {
+	fmt.Println("A USB debug connection has been initiated from " + remote + " which is  allowed.")
+
 	notification := toast.Notification{
 		AppID:   "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe",
 		Title:   "USB Debug Connection Allowed",
