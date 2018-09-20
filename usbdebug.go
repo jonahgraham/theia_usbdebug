@@ -153,7 +153,7 @@ var upgrader = websocket.Upgrader{
 			PermissionAllowedPrompt(origin[0])
 			return true
 		}
-		log.Println("Unknown origin, websocket accepted")
+		log.Println("Unknown origin, websocket rejected")
 		PermissionDeniedPrompt(origin[0])
 		return false
 	},
@@ -427,7 +427,8 @@ window.addEventListener("load", function(evt) {
 <body>
 <table>
 <tr><td valign="top" width="50%">
-<p>Click "Open" to create a connection to the server, 
+<p>TODO: Implement displaying status here</p>
+<p>Click "Open" to create a connection to USB Debug, 
 "Send" to send a message to the server and "Close" to close the connection. 
 You can change the message and send multiple times.
 <p>
